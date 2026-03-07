@@ -1,22 +1,19 @@
-import React, { useCallback } from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import React from 'react';
+import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ScreenNavBar, EmptyState, FloatingActionButton, NavActionButton } from '@/components/ui/styled-list-screen';
 
 export default function CategoriesScreen() {
   const colors = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const query = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.getCategories(1),
-  });
-
+  const query = useQuery({ queryKey: ['categories'], queryFn: () => api.getCategories(1) });
   const categories = query.data?.data || [];
 
   const handleDelete = (id: string, name: string) => {
@@ -31,49 +28,74 @@ export default function CategoriesScreen() {
 
   return (
     <ScreenContainer>
-      <View className="px-4 pt-2 pb-3 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
-          <MaterialIcons name="arrow-back" size={24} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text className="text-2xl font-bold text-foreground flex-1">Categories</Text>
-      </View>
       <FlatList
         data={categories}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={<ScreenNavBar title="Categories" />}
         renderItem={({ item }) => {
           const attr = item.attributes;
           return (
             <TouchableOpacity
-              className="bg-surface rounded-xl p-4 mx-4 mb-2 border border-border flex-row items-center"
+              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
               onPress={() => router.push(`/details/category/${item.id}` as any)}
+              activeOpacity={0.6}
             >
-              <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-3">
-                <MaterialIcons name="category" size={20} color={colors.primary} />
+              <View style={[styles.iconBg, { backgroundColor: '#8B5CF6' + '14' }]}>
+                <MaterialIcons name="category" size={20} color="#8B5CF6" />
               </View>
-              <Text className="text-base font-medium text-foreground flex-1">{attr.name}</Text>
-              <TouchableOpacity onPress={() => router.push(`/modals/category-form?id=${item.id}` as any)} className="mr-2">
-                <MaterialIcons name="edit" size={18} color={colors.muted} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id, attr.name)}>
-                <MaterialIcons name="delete" size={18} color={colors.error} />
-              </TouchableOpacity>
+              <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{attr.name}</Text>
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={() => router.push(`/modals/category-form?id=${item.id}` as any)} style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialIcons name="edit" size={18} color={colors.muted} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(item.id, attr.name)} style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           query.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> :
-          <Text className="text-muted text-center py-8">No categories</Text>
+          <EmptyState icon="category" title="No categories" subtitle="Tap + to create one" />
         }
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={colors.primary} />}
       />
-      <TouchableOpacity
-        className="absolute bottom-24 right-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
-        style={{ elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
-        onPress={() => router.push('/modals/category-form' as any)}
-      >
-        <MaterialIcons name="add" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
+      <FloatingActionButton onPress={() => router.push('/modals/category-form' as any)} />
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  iconBg: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  name: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionBtn: {
+    padding: 4,
+  },
+});

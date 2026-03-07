@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
@@ -18,17 +18,12 @@ export default function CategoryFormScreen() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const catQuery = useQuery({
-    queryKey: ['category', id],
-    queryFn: () => api.getCategory(id!),
-    enabled: isEditing,
-  });
+  const catQuery = useQuery({ queryKey: ['category', id], queryFn: () => api.getCategory(id!), enabled: isEditing });
 
   useEffect(() => {
     if (catQuery.data?.data) {
       const attr = catQuery.data.data.attributes;
-      setName(attr.name || '');
-      setNotes(attr.notes || '');
+      setName(attr.name || ''); setNotes(attr.notes || '');
     }
   }, [catQuery.data]);
 
@@ -37,38 +32,54 @@ export default function CategoryFormScreen() {
     setSaving(true);
     try {
       const data = { name: name.trim(), notes: notes || undefined };
-      if (isEditing) { await api.updateCategory(id!, data); }
-      else { await api.createCategory(data); }
+      if (isEditing) { await api.updateCategory(id!, data); } else { await api.createCategory(data); }
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       router.back();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save');
-    } finally { setSaving(false); }
+    } catch (e: any) { Alert.alert('Error', e.message || 'Failed to save'); } finally { setSaving(false); }
   };
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-        <View className="flex-row items-center px-4 py-3 border-b border-border">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <MaterialIcons name="close" size={24} color={colors.foreground} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+            <MaterialIcons name="close" size={20} color={colors.foreground} />
           </TouchableOpacity>
-          <Text className="text-lg font-semibold text-foreground flex-1">{isEditing ? 'Edit Category' : 'New Category'}</Text>
-          <TouchableOpacity onPress={handleSave} disabled={saving}>
-            {saving ? <ActivityIndicator color={colors.primary} /> : <Text className="text-base font-semibold text-primary">Save</Text>}
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{isEditing ? 'Edit Category' : 'New Category'}</Text>
+          <TouchableOpacity onPress={handleSave} disabled={saving} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
+            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
           </TouchableOpacity>
         </View>
-        <ScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
-          <View className="mt-4 mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Category Name *</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="e.g. Groceries" placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
-          </View>
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Notes</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="Optional notes..." placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes} multiline numberOfLines={3} textAlignVertical="top" />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
+          <View style={[styles.formSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.formField, { borderBottomColor: colors.border }]}>
+              <View style={styles.fieldRow}>
+                <MaterialIcons name="category" size={18} color={colors.muted} style={styles.fieldIcon} />
+                <TextInput style={[styles.fieldInput, { color: colors.foreground }]} placeholder="Category Name *" placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
+              </View>
+            </View>
+            <View style={styles.formField}>
+              <View style={styles.fieldRow}>
+                <MaterialIcons name="notes" size={18} color={colors.muted} style={styles.fieldIcon} />
+                <TextInput style={[styles.fieldInput, { color: colors.foreground, minHeight: 50 }]} placeholder="Notes (optional)" placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+              </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', marginLeft: 12, letterSpacing: -0.3 },
+  saveBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10 },
+  saveBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  formSection: { borderRadius: 16, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
+  formField: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  fieldRow: { flexDirection: 'row', alignItems: 'center' },
+  fieldIcon: { marginRight: 12 },
+  fieldInput: { flex: 1, fontSize: 15, fontWeight: '500', paddingVertical: 0 },
+});

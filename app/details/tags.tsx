@@ -1,11 +1,12 @@
 import React from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ScreenNavBar, EmptyState, FloatingActionButton } from '@/components/ui/styled-list-screen';
 
 export default function TagsScreen() {
   const colors = useColors();
@@ -27,47 +28,54 @@ export default function TagsScreen() {
 
   return (
     <ScreenContainer>
-      <View className="px-4 pt-2 pb-3 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
-          <MaterialIcons name="arrow-back" size={24} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text className="text-2xl font-bold text-foreground flex-1">Tags</Text>
-      </View>
       <FlatList
         data={tags}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={<ScreenNavBar title="Tags" />}
         renderItem={({ item }) => {
           const attr = item.attributes;
           return (
-            <TouchableOpacity className="bg-surface rounded-xl p-4 mx-4 mb-2 border border-border flex-row items-center"
-              onPress={() => router.push(`/details/tag/${encodeURIComponent(attr.tag)}` as any)}>
-              <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-3">
-                <MaterialIcons name="local-offer" size={20} color={colors.primary} />
+            <TouchableOpacity
+              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => router.push(`/details/tag/${encodeURIComponent(attr.tag)}` as any)}
+              activeOpacity={0.6}
+            >
+              <View style={[styles.iconBg, { backgroundColor: '#EC4899' + '14' }]}>
+                <MaterialIcons name="local-offer" size={20} color="#EC4899" />
               </View>
-              <View className="flex-1">
-                <Text className="text-base font-medium text-foreground">{attr.tag}</Text>
-                {attr.description ? <Text className="text-xs text-muted" numberOfLines={1}>{attr.description}</Text> : null}
+              <View style={styles.info}>
+                <Text style={[styles.name, { color: colors.foreground }]}>{attr.tag}</Text>
+                {attr.description ? <Text style={[styles.desc, { color: colors.muted }]} numberOfLines={1}>{attr.description}</Text> : null}
               </View>
-              <TouchableOpacity onPress={() => router.push(`/modals/tag-form?tag=${encodeURIComponent(attr.tag)}` as any)} className="mr-2">
-                <MaterialIcons name="edit" size={18} color={colors.muted} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(attr.tag)}>
-                <MaterialIcons name="delete" size={18} color={colors.error} />
-              </TouchableOpacity>
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={() => router.push(`/modals/tag-form?tag=${encodeURIComponent(attr.tag)}` as any)} style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialIcons name="edit" size={18} color={colors.muted} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(attr.tag)} style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           );
         }}
-        ListEmptyComponent={query.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> : <Text className="text-muted text-center py-8">No tags</Text>}
+        ListEmptyComponent={
+          query.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> :
+          <EmptyState icon="local-offer" title="No tags" subtitle="Tap + to create one" />
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={colors.primary} />}
       />
-      <TouchableOpacity
-        className="absolute bottom-24 right-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
-        style={{ elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
-        onPress={() => router.push('/modals/tag-form' as any)}
-      >
-        <MaterialIcons name="add" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
+      <FloatingActionButton onPress={() => router.push('/modals/tag-form' as any)} />
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 16, borderWidth: 1 },
+  iconBg: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  info: { flex: 1, marginRight: 8 },
+  name: { fontSize: 15, fontWeight: '600' },
+  desc: { fontSize: 12, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 12 },
+  actionBtn: { padding: 4 },
+});

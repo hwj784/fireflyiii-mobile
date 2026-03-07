@@ -43,3 +43,14 @@
 - [x] Piggy bank form: account picker for linked account
 - [x] Improve date picker UX - custom calendar modal with month navigation
 - [x] Add allowCustom support in pickers for creating new items inline
+- [x] Upgrade color theme to a more premium, sophisticated palette
+- [x] Redesign login screen with gradient background and glassmorphism card
+- [x] Redesign dashboard with hero balance card, gradient accents, and better card layout
+- [x] Redesign accounts tab with grouped sections and premium card styles
+- [x] Redesign transactions tab with better list items, type badges, and search bar
+- [x] Redesign budgets tab with visual progress bars and spending indicators
+- [x] Redesign more tab with polished menu grid/list
+- [x] Improve typography hierarchy (larger titles, better spacing)
+- [x] Add subtle shadows, rounded corners, and depth to cards
+- [x] Polish detail screens with consistent header and content layout
+- [x] Improve form modals with better visual hierarchy and grouped sections

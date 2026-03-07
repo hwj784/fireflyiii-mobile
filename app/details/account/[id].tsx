@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
@@ -29,11 +29,9 @@ export default function AccountDetailScreen() {
   const account = accountQuery.data?.data;
   const attr = account?.attributes;
   const transactions = txQuery.data?.data || [];
+  const balance = parseFloat(attr?.current_balance || '0');
 
-  const onRefresh = useCallback(() => {
-    accountQuery.refetch();
-    txQuery.refetch();
-  }, []);
+  const onRefresh = useCallback(() => { accountQuery.refetch(); txQuery.refetch(); }, []);
 
   const handleDelete = () => {
     Alert.alert('Delete Account', `Are you sure you want to delete "${attr?.name}"?`, [
@@ -44,9 +42,7 @@ export default function AccountDetailScreen() {
             await api.deleteAccount(id!);
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
             router.back();
-          } catch (e: any) {
-            Alert.alert('Error', e.message);
-          }
+          } catch (e: any) { Alert.alert('Error', e.message); }
         }
       },
     ]);
@@ -59,30 +55,26 @@ export default function AccountDetailScreen() {
     const isIncome = tx.type === 'deposit';
     const amountColor = isExpense ? colors.error : isIncome ? colors.success : colors.primary;
     const sign = getTransactionSign(tx.type);
+    const iconName = isExpense ? 'arrow-downward' : isIncome ? 'arrow-upward' : 'swap-horiz';
 
     return (
       <TouchableOpacity
-        className="bg-surface rounded-xl p-3.5 mx-4 mb-2 border border-border flex-row items-center"
+        style={[styles.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => router.push(`/details/transaction/${item.id}` as any)}
+        activeOpacity={0.6}
       >
-        <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: amountColor + '18' }}>
-          <MaterialIcons
-            name={isExpense ? 'arrow-downward' : isIncome ? 'arrow-upward' : 'swap-horiz'}
-            size={18}
-            color={amountColor}
-          />
+        <View style={[styles.txIcon, { backgroundColor: amountColor + '14' }]}>
+          <MaterialIcons name={iconName as any} size={18} color={amountColor} />
         </View>
-        <View className="flex-1 mr-2">
-          <Text className="text-sm font-medium text-foreground" numberOfLines={1}>{tx.description}</Text>
-          <Text className="text-xs text-muted" numberOfLines={1}>
+        <View style={styles.txInfo}>
+          <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>{tx.description}</Text>
+          <Text style={[styles.txMeta, { color: colors.muted }]} numberOfLines={1}>
             {tx.source_name}{tx.source_name && tx.destination_name ? ' → ' : ''}{tx.destination_name}
           </Text>
         </View>
-        <View className="items-end">
-          <Text className="text-sm font-semibold" style={{ color: amountColor }}>
-            {sign}{formatCurrency(tx.amount, tx.currency_symbol)}
-          </Text>
-          <Text className="text-xs text-muted">{formatDate(tx.date)}</Text>
+        <View style={styles.txAmountCol}>
+          <Text style={[styles.txAmount, { color: amountColor }]}>{sign}{formatCurrency(tx.amount, tx.currency_symbol)}</Text>
+          <Text style={[styles.txDate, { color: colors.muted }]}>{formatDate(tx.date)}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -103,43 +95,77 @@ export default function AccountDetailScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderTransaction}
         ListHeaderComponent={
-          <View className="px-4 pt-2 pb-3">
-            {/* Header */}
-            <View className="flex-row items-center mb-4">
-              <TouchableOpacity onPress={() => router.back()} className="mr-3">
-                <MaterialIcons name="arrow-back" size={24} color={colors.foreground} />
+          <View>
+            {/* Nav bar */}
+            <View style={styles.navBar}>
+              <TouchableOpacity onPress={() => router.back()} style={[styles.navBtn, { backgroundColor: colors.surface }]}>
+                <MaterialIcons name="arrow-back" size={22} color={colors.foreground} />
               </TouchableOpacity>
-              <View className="flex-1">
-                <Text className="text-xl font-bold text-foreground" numberOfLines={1}>{attr?.name}</Text>
-                <Text className="text-sm text-muted">{(attr?.type || '').replace(/-/g, ' ')}</Text>
+              <View style={styles.navActions}>
+                <TouchableOpacity
+                  onPress={() => router.push(`/modals/account-form?id=${id}` as any)}
+                  style={[styles.navBtn, { backgroundColor: colors.surface }]}
+                >
+                  <MaterialIcons name="edit" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDelete} style={[styles.navBtn, { backgroundColor: colors.error + '12' }]}>
+                  <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => router.push(`/modals/account-form?id=${id}` as any)} className="mr-2">
-                <MaterialIcons name="edit" size={22} color={colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleDelete}>
-                <MaterialIcons name="delete" size={22} color={colors.error} />
-              </TouchableOpacity>
             </View>
 
-            {/* Balance Card */}
-            <View className="bg-surface rounded-2xl p-5 border border-border mb-4">
-              <Text className="text-sm text-muted mb-1">Current Balance</Text>
-              <Text className="text-3xl font-bold text-foreground">
-                {formatCurrency(attr?.current_balance || 0, attr?.currency_symbol)}
-              </Text>
-              {attr?.iban ? <Text className="text-xs text-muted mt-2">IBAN: {attr.iban}</Text> : null}
-              {attr?.account_number ? <Text className="text-xs text-muted mt-1">Account: {attr.account_number}</Text> : null}
-              {attr?.notes ? <Text className="text-sm text-muted mt-2">{attr.notes}</Text> : null}
+            {/* Hero balance card */}
+            <View style={[styles.heroCard, { backgroundColor: colors.primary }]}>
+              <View style={styles.heroOverlay} />
+              <View style={styles.heroContent}>
+                <View style={[styles.heroIconBg, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                  <MaterialIcons name={(getAccountIcon(attr?.type, attr?.account_role) || 'account-balance') as any} size={24} color="#FFFFFF" />
+                </View>
+                <Text style={styles.heroName} numberOfLines={1}>{attr?.name}</Text>
+                <Text style={styles.heroType}>{(attr?.type || '').replace(/-/g, ' ')}</Text>
+                <Text style={styles.heroBalance}>{formatCurrency(attr?.current_balance || 0, attr?.currency_symbol)}</Text>
+              </View>
             </View>
 
-            <Text className="text-lg font-semibold text-foreground mb-2">Transactions</Text>
+            {/* Info rows */}
+            {(attr?.iban || attr?.account_number || attr?.notes) ? (
+              <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {attr?.iban ? (
+                  <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.infoLabel, { color: colors.muted }]}>IBAN</Text>
+                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{attr.iban}</Text>
+                  </View>
+                ) : null}
+                {attr?.account_number ? (
+                  <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.infoLabel, { color: colors.muted }]}>Account Number</Text>
+                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{attr.account_number}</Text>
+                  </View>
+                ) : null}
+                {attr?.notes ? (
+                  <View style={styles.infoRow}>
+                    <Text style={[styles.infoLabel, { color: colors.muted }]}>Notes</Text>
+                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{attr.notes}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Section header */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Transactions</Text>
+              <Text style={[styles.sectionCount, { color: colors.muted }]}>{transactions.length}</Text>
+            </View>
           </View>
         }
         ListEmptyComponent={
           txQuery.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
           ) : (
-            <Text className="text-muted text-center py-8">No transactions for this account</Text>
+            <View style={styles.emptyState}>
+              <MaterialIcons name="receipt-long" size={40} color={colors.border} />
+              <Text style={{ color: colors.muted, fontSize: 14, marginTop: 8 }}>No transactions for this account</Text>
+            </View>
           )
         }
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -150,3 +176,146 @@ export default function AccountDetailScreen() {
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  navBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  heroCard: {
+    marginHorizontal: 16,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  heroContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  heroIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  heroName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  heroType: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'capitalize',
+    marginBottom: 16,
+  },
+  heroBalance: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  infoCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  infoRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sectionCount: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  txCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  txIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  txInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  txDesc: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  txMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  txAmountCol: {
+    alignItems: 'flex-end',
+  },
+  txAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  txDate: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+});

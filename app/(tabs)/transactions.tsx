@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
@@ -9,6 +9,13 @@ import { formatCurrency, formatDate, getTransactionSign } from '@/lib/helpers';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const TX_TYPES = ['all', 'withdrawal', 'deposit', 'transfer'];
+const TX_ICONS: Record<string, string> = {
+  withdrawal: 'arrow-downward',
+  deposit: 'arrow-upward',
+  transfer: 'swap-horiz',
+  'opening-balance': 'flag',
+  reconciliation: 'check-circle',
+};
 
 export default function TransactionsScreen() {
   const colors = useColors();
@@ -34,47 +41,52 @@ export default function TransactionsScreen() {
 
   const totalPages = txQuery.data?.meta?.pagination?.total_pages || 1;
 
-  const onRefresh = useCallback(() => {
-    setPage(1);
-    txQuery.refetch();
-  }, []);
+  const onRefresh = useCallback(() => { setPage(1); txQuery.refetch(); }, []);
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'withdrawal': return colors.error;
+      case 'deposit': return colors.success;
+      case 'transfer': return colors.primary;
+      default: return colors.muted;
+    }
+  };
 
   const renderTransaction = ({ item }: { item: any }) => {
     const tx = item.attributes?.transactions?.[0];
     if (!tx) return null;
-    const isExpense = tx.type === 'withdrawal';
-    const isIncome = tx.type === 'deposit';
-    const isTransfer = tx.type === 'transfer';
-    const amountColor = isExpense ? colors.error : isIncome ? colors.success : colors.primary;
+    const typeColor = getTypeColor(tx.type);
     const sign = getTransactionSign(tx.type);
+    const iconName = (TX_ICONS[tx.type] || 'receipt') as any;
 
     return (
       <TouchableOpacity
-        className="bg-surface rounded-xl p-3.5 mx-4 mb-2 border border-border flex-row items-center"
+        style={[styles.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => router.push(`/details/transaction/${item.id}` as any)}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
       >
-        <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: amountColor + '18' }}>
-          <MaterialIcons
-            name={isExpense ? 'arrow-downward' : isIncome ? 'arrow-upward' : 'swap-horiz'}
-            size={18}
-            color={amountColor}
-          />
+        <View style={[styles.txIconBg, { backgroundColor: typeColor + '14' }]}>
+          <MaterialIcons name={iconName} size={18} color={typeColor} />
         </View>
-        <View className="flex-1 mr-2">
-          <Text className="text-sm font-medium text-foreground" numberOfLines={1}>{tx.description}</Text>
-          <Text className="text-xs text-muted" numberOfLines={1}>
-            {tx.source_name}{tx.source_name && tx.destination_name ? ' → ' : ''}{tx.destination_name}
-          </Text>
+        <View style={styles.txInfo}>
+          <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>{tx.description}</Text>
+          <View style={styles.txMetaRow}>
+            <Text style={[styles.txMeta, { color: colors.muted }]} numberOfLines={1}>
+              {tx.source_name}{tx.source_name && tx.destination_name ? ' → ' : ''}{tx.destination_name}
+            </Text>
+          </View>
           {tx.category_name ? (
-            <Text className="text-xs text-muted">{tx.category_name}</Text>
+            <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '10' }]}>
+              <MaterialIcons name="category" size={10} color={colors.primary} style={{ marginRight: 3 }} />
+              <Text style={[styles.categoryText, { color: colors.primary }]}>{tx.category_name}</Text>
+            </View>
           ) : null}
         </View>
-        <View className="items-end">
-          <Text className="text-sm font-semibold" style={{ color: amountColor }}>
+        <View style={styles.txAmountCol}>
+          <Text style={[styles.txAmount, { color: typeColor }]}>
             {sign}{formatCurrency(tx.amount, tx.currency_symbol)}
           </Text>
-          <Text className="text-xs text-muted">{formatDate(tx.date)}</Text>
+          <Text style={[styles.txDate, { color: colors.muted }]}>{formatDate(tx.date)}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -82,71 +94,91 @@ export default function TransactionsScreen() {
 
   return (
     <ScreenContainer>
-      <View className="px-4 pt-2 pb-2">
-        <Text className="text-2xl font-bold text-foreground mb-3">Transactions</Text>
-
-        {/* Search */}
-        <View className="flex-row items-center bg-surface border border-border rounded-xl px-3 py-2.5 mb-3">
-          <MaterialIcons name="search" size={20} color={colors.muted} />
-          <TextInput
-            className="flex-1 ml-2 text-sm text-foreground"
-            placeholder="Search transactions..."
-            placeholderTextColor={colors.muted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialIcons name="close" size={18} color={colors.muted} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Type Filter */}
-        <View className="flex-row gap-2 mb-1">
-          {TX_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type}
-              className={`px-3 py-1.5 rounded-full ${activeType === type ? 'bg-primary' : 'bg-surface border border-border'}`}
-              onPress={() => { setActiveType(type); setPage(1); }}
-            >
-              <Text className={`text-xs font-medium capitalize ${activeType === type ? 'text-white' : 'text-muted'}`}>
-                {type}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       <FlatList
         data={transactions}
         keyExtractor={(item) => item.id}
         renderItem={renderTransaction}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.titleRow}>
+              <Text style={[styles.pageTitle, { color: colors.foreground }]}>Transactions</Text>
+            </View>
+
+            {/* Search Bar */}
+            <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <MaterialIcons name="search" size={20} color={colors.muted} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.foreground }]}
+                placeholder="Search transactions..."
+                placeholderTextColor={colors.muted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <MaterialIcons name="close" size={18} color={colors.muted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Type Filter */}
+            <View style={styles.chipRow}>
+              {TX_TYPES.map((type) => {
+                const isActive = activeType === type;
+                const chipColor = type === 'all' ? colors.primary : getTypeColor(type);
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: isActive ? chipColor : colors.surface,
+                        borderColor: isActive ? chipColor : colors.border,
+                      },
+                    ]}
+                    onPress={() => { setActiveType(type); setPage(1); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chipText, { color: isActive ? '#FFFFFF' : colors.muted }]}>
+                      {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        }
         ListEmptyComponent={
           txQuery.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
           ) : (
-            <Text className="text-muted text-center py-8">No transactions found</Text>
+            <View style={styles.emptyState}>
+              <MaterialIcons name="receipt-long" size={48} color={colors.border} />
+              <Text style={[styles.emptyTitle, { color: colors.muted }]}>No transactions found</Text>
+            </View>
           )
         }
         ListFooterComponent={
           totalPages > 1 && !searchQuery ? (
-            <View className="flex-row items-center justify-center gap-4 py-4">
+            <View style={styles.paginationRow}>
               <TouchableOpacity
                 onPress={() => setPage(Math.max(1, page - 1))}
                 disabled={page <= 1}
-                style={page <= 1 ? { opacity: 0.3 } : undefined}
+                style={[styles.pageBtn, { backgroundColor: colors.surface, borderColor: colors.border, opacity: page <= 1 ? 0.4 : 1 }]}
               >
-                <MaterialIcons name="chevron-left" size={28} color={colors.primary} />
+                <MaterialIcons name="chevron-left" size={22} color={colors.primary} />
               </TouchableOpacity>
-              <Text className="text-sm text-muted">{page} / {totalPages}</Text>
+              <View style={[styles.pageIndicator, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.pageText, { color: colors.foreground }]}>{page}</Text>
+                <Text style={[styles.pageTextMuted, { color: colors.muted }]}> / {totalPages}</Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                style={page >= totalPages ? { opacity: 0.3 } : undefined}
+                style={[styles.pageBtn, { backgroundColor: colors.surface, borderColor: colors.border, opacity: page >= totalPages ? 0.4 : 1 }]}
               >
-                <MaterialIcons name="chevron-right" size={28} color={colors.primary} />
+                <MaterialIcons name="chevron-right" size={22} color={colors.primary} />
               </TouchableOpacity>
             </View>
           ) : null
@@ -157,13 +189,172 @@ export default function TransactionsScreen() {
         }
       />
 
+      {/* FAB */}
       <TouchableOpacity
-        className="absolute bottom-24 right-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
-        style={{ elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
+        style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() => router.push('/modals/transaction-form' as any)}
+        activeOpacity={0.85}
       >
-        <MaterialIcons name="add" size={28} color="#FFFFFF" />
+        <MaterialIcons name="add" size={26} color="#FFFFFF" />
       </TouchableOpacity>
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  titleRow: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingVertical: 12,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  txCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  txIconBg: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  txInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  txDesc: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  txMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  txMeta: {
+    fontSize: 12,
+    flex: 1,
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  txAmountCol: {
+    alignItems: 'flex-end',
+  },
+  txAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  txDate: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  pageBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  pageText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pageTextMuted: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 60,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 96,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+});

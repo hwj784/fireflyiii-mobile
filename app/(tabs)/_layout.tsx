@@ -13,7 +13,7 @@ export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
-  const tabBarHeight = 56 + bottomPadding;
+  const tabBarHeight = 60 + bottomPadding;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -28,13 +28,23 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.muted,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          letterSpacing: 0.1,
+        },
         tabBarStyle: {
           paddingTop: 8,
           paddingBottom: bottomPadding,
           height: tabBarHeight,
-          backgroundColor: colors.background,
+          backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 0.5,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          elevation: 12,
         },
       }}
     >
@@ -42,35 +52,35 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="dashboard" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="dashboard" color={color} />,
         }}
       />
       <Tabs.Screen
         name="accounts"
         options={{
           title: "Accounts",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="account-balance" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="account-balance" color={color} />,
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
           title: "Transactions",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="receipt-long" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="receipt-long" color={color} />,
         }}
       />
       <Tabs.Screen
         name="budgets"
         options={{
           title: "Budgets",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="pie-chart" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="pie-chart" color={color} />,
         }}
       />
       <Tabs.Screen
         name="more"
         options={{
           title: "More",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="more-horiz" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="more-horiz" color={color} />,
         }}
       />
     </Tabs>

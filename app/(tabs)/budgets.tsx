@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
@@ -27,14 +27,13 @@ export default function BudgetsScreen() {
   const budgets = budgetsQuery.data?.data || [];
   const limits = limitsQuery.data?.data || [];
 
-  const onRefresh = useCallback(() => {
-    budgetsQuery.refetch();
-    limitsQuery.refetch();
-  }, []);
+  const onRefresh = useCallback(() => { budgetsQuery.refetch(); limitsQuery.refetch(); }, []);
 
   const getBudgetLimit = (budgetId: string) => {
     return limits.find((l: any) => l.attributes?.budget_id === budgetId);
   };
+
+  const monthName = new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   const renderBudget = ({ item }: { item: any }) => {
     const attr = item.attributes;
@@ -43,38 +42,62 @@ export default function BudgetsScreen() {
     const spent = limit ? Math.abs(parseFloat(limit.attributes?.spent || '0')) : 0;
     const percentage = limitAmount > 0 ? Math.min((spent / limitAmount) * 100, 100) : 0;
     const isOverBudget = spent > limitAmount && limitAmount > 0;
+    const remaining = Math.max(limitAmount - spent, 0);
     const currencySymbol = limit?.attributes?.currency_symbol || attr.currency_symbol || '';
+
+    const barColor = isOverBudget ? colors.error : percentage > 80 ? colors.warning : colors.success;
 
     return (
       <TouchableOpacity
-        className="bg-surface rounded-xl p-4 mx-4 mb-2 border border-border"
+        style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => router.push(`/details/budget/${item.id}` as any)}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
       >
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-base font-medium text-foreground flex-1 mr-2" numberOfLines={1}>{attr.name}</Text>
+        {/* Header row */}
+        <View style={styles.budgetHeader}>
+          <View style={[styles.budgetIconBg, { backgroundColor: barColor + '14' }]}>
+            <MaterialIcons name="pie-chart" size={18} color={barColor} />
+          </View>
+          <View style={styles.budgetTitleCol}>
+            <Text style={[styles.budgetName, { color: colors.foreground }]} numberOfLines={1}>{attr.name}</Text>
+            {limitAmount > 0 ? (
+              <Text style={[styles.budgetMeta, { color: colors.muted }]}>
+                {formatCurrency(spent, currencySymbol)} of {formatCurrency(limitAmount, currencySymbol)}
+              </Text>
+            ) : (
+              <Text style={[styles.budgetMeta, { color: colors.muted }]}>No limit set</Text>
+            )}
+          </View>
           {limitAmount > 0 ? (
-            <Text className={`text-sm font-semibold ${isOverBudget ? 'text-error' : 'text-foreground'}`}>
-              {formatCurrency(spent, currencySymbol)} / {formatCurrency(limitAmount, currencySymbol)}
-            </Text>
-          ) : (
-            <Text className="text-sm text-muted">No limit</Text>
-          )}
+            <View style={[styles.percentBadge, { backgroundColor: barColor + '14' }]}>
+              <Text style={[styles.percentText, { color: barColor }]}>{percentage.toFixed(0)}%</Text>
+            </View>
+          ) : null}
         </View>
+
+        {/* Progress bar */}
         {limitAmount > 0 ? (
-          <View>
-            <View className="h-2 bg-border rounded-full overflow-hidden">
+          <View style={styles.progressSection}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
               <View
-                className="h-full rounded-full"
-                style={{
-                  width: `${percentage}%`,
-                  backgroundColor: isOverBudget ? colors.error : percentage > 80 ? colors.warning : colors.success,
-                }}
+                style={[styles.progressFill, { width: `${Math.min(percentage, 100)}%`, backgroundColor: barColor }]}
               />
             </View>
-            <Text className="text-xs text-muted mt-1">
-              {percentage.toFixed(0)}% used · {formatCurrency(Math.max(limitAmount - spent, 0), currencySymbol)} remaining
-            </Text>
+            <View style={styles.progressLabels}>
+              <View style={styles.progressLabelItem}>
+                <View style={[styles.dot, { backgroundColor: barColor }]} />
+                <Text style={[styles.progressLabelText, { color: colors.muted }]}>Spent</Text>
+              </View>
+              {!isOverBudget ? (
+                <Text style={[styles.remainingText, { color: colors.success }]}>
+                  {formatCurrency(remaining, currencySymbol)} left
+                </Text>
+              ) : (
+                <Text style={[styles.remainingText, { color: colors.error }]}>
+                  {formatCurrency(spent - limitAmount, currencySymbol)} over
+                </Text>
+              )}
+            </View>
           </View>
         ) : null}
       </TouchableOpacity>
@@ -83,22 +106,29 @@ export default function BudgetsScreen() {
 
   return (
     <ScreenContainer>
-      <View className="px-4 pt-2 pb-3">
-        <Text className="text-2xl font-bold text-foreground">Budgets</Text>
-        <Text className="text-sm text-muted mt-1">
-          {new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-        </Text>
-      </View>
-
       <FlatList
         data={budgets}
         keyExtractor={(item) => item.id}
         renderItem={renderBudget}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.titleRow}>
+              <View>
+                <Text style={[styles.pageTitle, { color: colors.foreground }]}>Budgets</Text>
+                <Text style={[styles.pageSubtitle, { color: colors.muted }]}>{monthName}</Text>
+              </View>
+            </View>
+          </View>
+        }
         ListEmptyComponent={
           budgetsQuery.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
           ) : (
-            <Text className="text-muted text-center py-8">No budgets set up</Text>
+            <View style={styles.emptyState}>
+              <MaterialIcons name="pie-chart" size={48} color={colors.border} />
+              <Text style={[styles.emptyTitle, { color: colors.muted }]}>No budgets set up</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.muted }]}>Create budgets to track your spending</Text>
+            </View>
           )
         }
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -107,13 +137,135 @@ export default function BudgetsScreen() {
         }
       />
 
+      {/* FAB */}
       <TouchableOpacity
-        className="absolute bottom-24 right-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
-        style={{ elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
+        style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() => router.push('/modals/budget-form' as any)}
+        activeOpacity={0.85}
       >
-        <MaterialIcons name="add" size={28} color="#FFFFFF" />
+        <MaterialIcons name="add" size={26} color="#FFFFFF" />
       </TouchableOpacity>
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  titleRow: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  budgetCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  budgetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  budgetIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  budgetTitleCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  budgetName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  budgetMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  percentBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  percentText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  progressSection: {
+    marginTop: 14,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  progressLabelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  progressLabelText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  remainingText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 60,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 96,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+});

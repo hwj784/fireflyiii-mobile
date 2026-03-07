@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Text, View, TextInput, TouchableOpacity, FlatList, Modal,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useColors } from '@/hooks/use-colors';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -32,20 +32,9 @@ interface PickerSheetProps {
 }
 
 export function PickerSheet({
-  visible,
-  onClose,
-  title,
-  items,
-  selectedId,
-  selectedIds = [],
-  onSelect,
-  onMultiSelect,
-  multiSelect = false,
-  searchable = true,
-  allowCustom = false,
-  customPlaceholder = 'Enter custom value...',
-  onCustomSubmit,
-  loading = false,
+  visible, onClose, title, items, selectedId, selectedIds = [], onSelect, onMultiSelect,
+  multiSelect = false, searchable = true, allowCustom = false, customPlaceholder = 'Enter custom value...',
+  onCustomSubmit, loading = false,
 }: PickerSheetProps) {
   const colors = useColors();
   const [search, setSearch] = useState('');
@@ -54,89 +43,57 @@ export function PickerSheet({
   const filteredItems = useMemo(() => {
     if (!search.trim()) return items;
     const q = search.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q) ||
-        (item.sublabel && item.sublabel.toLowerCase().includes(q))
-    );
+    return items.filter((item) => item.label.toLowerCase().includes(q) || (item.sublabel && item.sublabel.toLowerCase().includes(q)));
   }, [items, search]);
 
   const handleSelect = (item: PickerItem) => {
     if (multiSelect) {
-      setLocalSelectedIds((prev) => {
-        const exists = prev.includes(item.id);
-        return exists ? prev.filter((id) => id !== item.id) : [...prev, item.id];
-      });
+      setLocalSelectedIds((prev) => prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]);
     } else {
-      onSelect(item);
-      setSearch('');
-      onClose();
+      onSelect(item); setSearch(''); onClose();
     }
   };
 
   const handleDone = () => {
-    if (multiSelect && onMultiSelect) {
-      const selected = items.filter((item) => localSelectedIds.includes(item.id));
-      onMultiSelect(selected);
-    }
-    setSearch('');
-    onClose();
+    if (multiSelect && onMultiSelect) onMultiSelect(items.filter((item) => localSelectedIds.includes(item.id)));
+    setSearch(''); onClose();
   };
 
   const handleCustomSubmit = () => {
-    if (search.trim() && onCustomSubmit) {
-      onCustomSubmit(search.trim());
-      setSearch('');
-      onClose();
-    }
+    if (search.trim() && onCustomSubmit) { onCustomSubmit(search.trim()); setSearch(''); onClose(); }
   };
 
   return (
     <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}
-          activeOpacity={1}
-          onPress={() => { setSearch(''); onClose(); }}
-        />
-        <View
-          style={{
-            backgroundColor: colors.background,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: '70%',
-            minHeight: 300,
-          }}
-        >
-          {/* Handle bar */}
-          <View className="items-center pt-2 pb-1">
-            <View className="w-10 h-1 rounded-full bg-border" />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => { setSearch(''); onClose(); }} />
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          {/* Handle */}
+          <View style={styles.handleRow}>
+            <View style={[styles.handle, { backgroundColor: colors.border }]} />
           </View>
 
           {/* Header */}
-          <View className="flex-row items-center px-4 py-2">
-            <Text className="text-lg font-semibold text-foreground flex-1">{title}</Text>
+          <View style={styles.headerRow}>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{title}</Text>
             {multiSelect ? (
-              <TouchableOpacity onPress={handleDone}>
-                <Text className="text-base font-semibold text-primary">Done</Text>
+              <TouchableOpacity onPress={handleDone} style={[styles.doneBtn, { backgroundColor: colors.primary }]}>
+                <Text style={styles.doneBtnText}>Done</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => { setSearch(''); onClose(); }}>
-                <MaterialIcons name="close" size={24} color={colors.muted} />
+              <TouchableOpacity onPress={() => { setSearch(''); onClose(); }} style={[styles.closeBtn, { backgroundColor: colors.surface }]}>
+                <MaterialIcons name="close" size={18} color={colors.muted} />
               </TouchableOpacity>
             )}
           </View>
 
           {/* Search */}
           {searchable ? (
-            <View className="px-4 pb-2">
-              <View className="flex-row items-center bg-surface border border-border rounded-xl px-3">
-                <MaterialIcons name="search" size={20} color={colors.muted} />
+            <View style={styles.searchRow}>
+              <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <MaterialIcons name="search" size={18} color={colors.muted} />
                 <TextInput
-                  className="flex-1 py-2.5 px-2 text-base text-foreground"
+                  style={[styles.searchInput, { color: colors.foreground }]}
                   placeholder="Search..."
                   placeholderTextColor={colors.muted}
                   value={search}
@@ -147,7 +104,7 @@ export function PickerSheet({
                 />
                 {search ? (
                   <TouchableOpacity onPress={() => setSearch('')}>
-                    <MaterialIcons name="close" size={18} color={colors.muted} />
+                    <MaterialIcons name="close" size={16} color={colors.muted} />
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -160,68 +117,45 @@ export function PickerSheet({
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
-              const isSelected = multiSelect
-                ? localSelectedIds.includes(item.id)
-                : item.id === selectedId;
+              const isSelected = multiSelect ? localSelectedIds.includes(item.id) : item.id === selectedId;
               return (
-                <TouchableOpacity
-                  className="flex-row items-center px-4 py-3 border-b border-border/30"
-                  onPress={() => handleSelect(item)}
-                  activeOpacity={0.6}
-                >
+                <TouchableOpacity style={[styles.itemRow, { borderBottomColor: colors.border + '30' }]} onPress={() => handleSelect(item)} activeOpacity={0.6}>
                   {item.icon ? (
-                    <View
-                      className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                      style={{ backgroundColor: (item.color || colors.primary) + '18' }}
-                    >
+                    <View style={[styles.itemIcon, { backgroundColor: (item.color || colors.primary) + '14' }]}>
                       <MaterialIcons name={item.icon as any} size={16} color={item.color || colors.primary} />
                     </View>
                   ) : item.color ? (
-                    <View
-                      className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                      style={{ backgroundColor: item.color + '18' }}
-                    >
-                      <Text className="text-xs font-bold" style={{ color: item.color }}>
-                        {item.label.charAt(0).toUpperCase()}
-                      </Text>
+                    <View style={[styles.itemIcon, { backgroundColor: item.color + '14' }]}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: item.color }}>{item.label.charAt(0).toUpperCase()}</Text>
                     </View>
                   ) : null}
-                  <View className="flex-1 mr-2">
-                    <Text className="text-base text-foreground" numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                    {item.sublabel ? (
-                      <Text className="text-xs text-muted" numberOfLines={1}>
-                        {item.sublabel}
-                      </Text>
-                    ) : null}
+                  <View style={styles.itemContent}>
+                    <Text style={[styles.itemLabel, { color: colors.foreground }]} numberOfLines={1}>{item.label}</Text>
+                    {item.sublabel ? <Text style={[styles.itemSublabel, { color: colors.muted }]} numberOfLines={1}>{item.sublabel}</Text> : null}
                   </View>
                   {isSelected ? (
-                    <MaterialIcons
-                      name={multiSelect ? 'check-box' : 'check-circle'}
-                      size={22}
-                      color={colors.primary}
-                    />
+                    <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+                      <MaterialIcons name="check" size={14} color="#FFFFFF" />
+                    </View>
                   ) : multiSelect ? (
-                    <MaterialIcons name="check-box-outline-blank" size={22} color={colors.border} />
+                    <View style={[styles.uncheckBadge, { borderColor: colors.border }]} />
                   ) : null}
                 </TouchableOpacity>
               );
             }}
             ListEmptyComponent={
-              <View className="py-8 items-center">
+              <View style={styles.emptyState}>
                 {loading ? (
-                  <Text className="text-muted">Loading...</Text>
+                  <ActivityIndicator color={colors.primary} />
                 ) : allowCustom && search.trim() ? (
-                  <TouchableOpacity
-                    className="flex-row items-center px-4 py-3"
-                    onPress={handleCustomSubmit}
-                  >
-                    <MaterialIcons name="add" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-                    <Text className="text-base text-primary">Use "{search.trim()}"</Text>
+                  <TouchableOpacity style={styles.customRow} onPress={handleCustomSubmit}>
+                    <View style={[styles.addIcon, { backgroundColor: colors.primary + '14' }]}>
+                      <MaterialIcons name="add" size={16} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.customText, { color: colors.primary }]}>Create "{search.trim()}"</Text>
                   </TouchableOpacity>
                 ) : (
-                  <Text className="text-muted">No items found</Text>
+                  <Text style={[styles.emptyText, { color: colors.muted }]}>No items found</Text>
                 )}
               </View>
             }
@@ -233,85 +167,86 @@ export function PickerSheet({
   );
 }
 
-// Convenience: A touchable field that opens a picker
 interface PickerFieldProps {
-  label: string;
-  value: string;
-  placeholder: string;
-  onPress: () => void;
-  required?: boolean;
-  icon?: string;
+  label: string; value: string; placeholder: string; onPress: () => void; required?: boolean; icon?: string;
 }
 
 export function PickerField({ label, value, placeholder, onPress, required, icon }: PickerFieldProps) {
   const colors = useColors();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1">
-        {label}{required ? ' *' : ''}
-      </Text>
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted, marginBottom: 4 }}>{label}{required ? ' *' : ''}</Text>
       <TouchableOpacity
-        className="bg-surface border border-border rounded-xl px-4 py-3 flex-row items-center"
-        onPress={onPress}
-        activeOpacity={0.7}
+        style={[styles.fieldBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={onPress} activeOpacity={0.7}
       >
-        {icon ? (
-          <MaterialIcons name={icon as any} size={18} color={colors.muted} style={{ marginRight: 8 }} />
-        ) : null}
-        <Text
-          className={`flex-1 text-base ${value ? 'text-foreground' : 'text-muted'}`}
-          numberOfLines={1}
-        >
-          {value || placeholder}
-        </Text>
-        <MaterialIcons name="keyboard-arrow-down" size={22} color={colors.muted} />
+        {icon ? <MaterialIcons name={icon as any} size={18} color={colors.muted} style={{ marginRight: 8 }} /> : null}
+        <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: value ? colors.foreground : colors.muted }} numberOfLines={1}>{value || placeholder}</Text>
+        <MaterialIcons name="keyboard-arrow-down" size={20} color={colors.muted} />
       </TouchableOpacity>
     </View>
   );
 }
 
-// Multi-value display field (for tags)
 interface MultiPickerFieldProps {
-  label: string;
-  values: string[];
-  placeholder: string;
-  onPress: () => void;
-  onRemove?: (value: string) => void;
+  label: string; values: string[]; placeholder: string; onPress: () => void; onRemove?: (value: string) => void;
 }
 
 export function MultiPickerField({ label, values, placeholder, onPress, onRemove }: MultiPickerFieldProps) {
   const colors = useColors();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1">{label}</Text>
-      <TouchableOpacity
-        className="bg-surface border border-border rounded-xl px-4 py-3"
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted, marginBottom: 4 }}>{label}</Text>
+      <TouchableOpacity style={[styles.fieldBox, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={onPress} activeOpacity={0.7}>
         {values.length > 0 ? (
-          <View className="flex-row flex-wrap gap-1.5">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {values.map((v) => (
-              <View
-                key={v}
-                className="flex-row items-center bg-primary/10 rounded-lg px-2.5 py-1"
-              >
-                <Text className="text-sm text-primary mr-1">{v}</Text>
+              <View key={v} style={[styles.tagBadge, { backgroundColor: colors.primary + '14' }]}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary, marginRight: 4 }}>{v}</Text>
                 {onRemove ? (
                   <TouchableOpacity onPress={() => onRemove(v)}>
-                    <MaterialIcons name="close" size={14} color={colors.primary} />
+                    <MaterialIcons name="close" size={12} color={colors.primary} />
                   </TouchableOpacity>
                 ) : null}
               </View>
             ))}
           </View>
         ) : (
-          <View className="flex-row items-center justify-between">
-            <Text className="text-base text-muted">{placeholder}</Text>
-            <MaterialIcons name="keyboard-arrow-down" size={22} color={colors.muted} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+            <Text style={{ fontSize: 15, color: colors.muted }}>{placeholder}</Text>
+            <MaterialIcons name="keyboard-arrow-down" size={20} color={colors.muted} />
           </View>
         )}
       </TouchableOpacity>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', minHeight: 300, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20 },
+  handleRow: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
+  handle: { width: 36, height: 4, borderRadius: 2 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
+  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  doneBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8 },
+  doneBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  closeBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  searchRow: { paddingHorizontal: 16, paddingBottom: 8 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 12 },
+  searchInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 15 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  itemIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  itemContent: { flex: 1, marginRight: 8 },
+  itemLabel: { fontSize: 15, fontWeight: '500' },
+  itemSublabel: { fontSize: 12, marginTop: 1 },
+  checkBadge: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  uncheckBadge: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5 },
+  emptyState: { paddingVertical: 32, alignItems: 'center' },
+  emptyText: { fontSize: 14, fontWeight: '500' },
+  customRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  addIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  customText: { fontSize: 15, fontWeight: '600' },
+  fieldBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  tagBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+});

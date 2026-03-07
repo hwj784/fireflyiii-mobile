@@ -1,57 +1,67 @@
 import React from 'react';
-import { Text, View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Text, View, FlatList, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ScreenNavBar, EmptyState } from '@/components/ui/styled-list-screen';
 
 export default function CurrenciesScreen() {
   const colors = useColors();
-  const router = useRouter();
-
   const query = useQuery({ queryKey: ['currencies'], queryFn: () => api.getCurrencies(1) });
   const currencies = query.data?.data || [];
 
   return (
     <ScreenContainer>
-      <View className="px-4 pt-2 pb-3 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
-          <MaterialIcons name="arrow-back" size={24} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text className="text-2xl font-bold text-foreground flex-1">Currencies</Text>
-      </View>
       <FlatList
         data={currencies}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={<ScreenNavBar title="Currencies" />}
         renderItem={({ item }) => {
           const attr = item.attributes;
           return (
-            <View className="bg-surface rounded-xl p-4 mx-4 mb-2 border border-border flex-row items-center">
-              <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-3">
-                <Text className="text-base font-bold text-primary">{attr.symbol}</Text>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.symbolBg, { backgroundColor: colors.primary + '14' }]}>
+                <Text style={[styles.symbolText, { color: colors.primary }]}>{attr.symbol}</Text>
               </View>
-              <View className="flex-1">
-                <Text className="text-base font-medium text-foreground">{attr.name}</Text>
-                <Text className="text-xs text-muted">{attr.code} · {attr.decimal_places} decimals</Text>
+              <View style={styles.info}>
+                <Text style={[styles.name, { color: colors.foreground }]}>{attr.name}</Text>
+                <Text style={[styles.meta, { color: colors.muted }]}>{attr.code} · {attr.decimal_places} decimals</Text>
               </View>
               {attr.default ? (
-                <View className="bg-primary/10 px-2 py-1 rounded-full">
-                  <Text className="text-xs text-primary font-medium">Default</Text>
+                <View style={[styles.badge, { backgroundColor: colors.primary + '14' }]}>
+                  <Text style={[styles.badgeText, { color: colors.primary }]}>Default</Text>
                 </View>
               ) : attr.enabled ? (
-                <View className="bg-success/10 px-2 py-1 rounded-full">
-                  <Text className="text-xs text-success font-medium">Enabled</Text>
+                <View style={[styles.badge, { backgroundColor: colors.success + '14' }]}>
+                  <Text style={[styles.badgeText, { color: colors.success }]}>Enabled</Text>
                 </View>
-              ) : null}
+              ) : (
+                <View style={[styles.badge, { backgroundColor: colors.muted + '14' }]}>
+                  <Text style={[styles.badgeText, { color: colors.muted }]}>Disabled</Text>
+                </View>
+              )}
             </View>
           );
         }}
-        ListEmptyComponent={query.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> : <Text className="text-muted text-center py-8">No currencies</Text>}
+        ListEmptyComponent={
+          query.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> :
+          <EmptyState icon="currency-exchange" title="No currencies" />
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={colors.primary} />}
       />
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 16, borderWidth: 1 },
+  symbolBg: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  symbolText: { fontSize: 18, fontWeight: '800' },
+  info: { flex: 1, marginRight: 8 },
+  name: { fontSize: 15, fontWeight: '600' },
+  meta: { fontSize: 12, marginTop: 2 },
+  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+});
