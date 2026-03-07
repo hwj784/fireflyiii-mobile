@@ -1,0 +1,37 @@
+# Project TODO
+
+- [x] Theme and color configuration (finance-themed blue palette)
+- [x] API client service for Firefly III REST API v1
+- [x] Authentication flow (server URL + Personal Access Token)
+- [x] Secure credential storage with expo-secure-store
+- [x] Tab bar navigation (Dashboard, Accounts, Transactions, Budgets, More)
+- [x] Icon mappings for all tab bar icons
+- [x] Dashboard screen with summary cards and recent transactions
+- [x] Accounts list screen grouped by type
+- [x] Account detail screen with transaction history
+- [x] Create/Edit account form
+- [x] Transactions list screen with date grouping
+- [x] Transaction detail screen
+- [x] Create/Edit transaction form (withdrawal/deposit/transfer)
+- [x] Transaction search and filter
+- [x] Budgets list screen with progress bars
+- [x] Budget detail screen with limits and transactions
+- [x] Create/Edit budget form
+- [x] Categories list and detail screens
+- [x] Create/Edit category
+- [x] Tags list and detail screens
+- [x] Create/Edit tag
+- [x] Piggy banks list with progress bars
+- [x] Piggy bank detail with events and add/remove money
+- [x] Create/Edit piggy bank
+- [x] Bills list screen
+- [x] Bill detail screen
+- [x] Create/Edit bill
+- [x] Rules list screen with fire/delete actions
+- [x] Recurring transactions list screen
+- [x] Reports/Charts screen (summary, budget overview, category breakdown)
+- [x] Settings screen with server info and user info
+- [x] Currency management screen
+- [x] Pull-to-refresh on all list screens
+- [x] App logo generation (Firefly + dollar sign icon)
+- [x] Fix TypeScript errors (style callbacks, missing API methods)
