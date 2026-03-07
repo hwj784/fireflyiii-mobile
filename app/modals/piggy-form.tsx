@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { PickerSheet, PickerField, type PickerItem } from '@/components/ui/picker-sheet';
+import { DatePickerField } from '@/components/ui/date-picker';
 
 export default function PiggyFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -22,10 +27,20 @@ export default function PiggyFormScreen() {
   const [targetDate, setTargetDate] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+
   const piggyQuery = useQuery({
     queryKey: ['piggy-bank', id],
     queryFn: () => api.getPiggyBank(id!),
     enabled: isEditing,
+  });
+
+  const accountsQuery = useQuery({
+    queryKey: ['accounts-asset'],
+    queryFn: async () => {
+      const res = await api.getAccounts(1, 'asset');
+      return res.data;
+    },
   });
 
   useEffect(() => {
@@ -36,9 +51,20 @@ export default function PiggyFormScreen() {
       setAccountName(attr.account_name || '');
       setTargetAmount(attr.target_amount || '');
       setNotes(attr.notes || '');
-      setTargetDate(attr.target_date || '');
+      setTargetDate(attr.target_date?.split('T')[0] || '');
     }
   }, [piggyQuery.data]);
+
+  const accountItems: PickerItem[] = useMemo(() => {
+    if (!accountsQuery.data) return [];
+    return accountsQuery.data.map((a: any) => ({
+      id: String(a.id),
+      label: a.attributes.name,
+      sublabel: `${a.attributes.currency_symbol || ''}${parseFloat(a.attributes.current_balance || 0).toFixed(2)}`,
+      icon: a.attributes.account_role === 'savingAsset' ? 'savings' :
+            a.attributes.account_role === 'ccAsset' ? 'credit-card' : 'account-balance',
+    }));
+  }, [accountsQuery.data]);
 
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert('Error', 'Please enter a name'); return; }
@@ -61,13 +87,6 @@ export default function PiggyFormScreen() {
     } finally { setSaving(false); }
   };
 
-  const [showAccountSuggestions, setShowAccountSuggestions] = useState(false);
-  const accountsQuery = useQuery({
-    queryKey: ['autocomplete', 'accounts-piggy', accountName],
-    queryFn: () => api.autocomplete('accounts', accountName, { types: 'Asset account' }),
-    enabled: accountName.length > 0 && showAccountSuggestions,
-  });
-
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
@@ -80,47 +99,82 @@ export default function PiggyFormScreen() {
             {saving ? <ActivityIndicator color={colors.primary} /> : <Text className="text-base font-semibold text-primary">Save</Text>}
           </TouchableOpacity>
         </View>
+
         <ScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
+          {/* Name */}
           <View className="mt-4 mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Name *</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="e.g. Vacation Fund" placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
-          </View>
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Linked Account *</Text>
             <TextInput
               className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="Search asset account..."
+              placeholder="e.g. Vacation Fund"
               placeholderTextColor={colors.muted}
-              value={accountName}
-              onChangeText={(text) => { setAccountName(text); setAccountId(''); setShowAccountSuggestions(true); }}
-              onBlur={() => setTimeout(() => setShowAccountSuggestions(false), 200)}
+              value={name}
+              onChangeText={setName}
             />
-            {showAccountSuggestions && (accountsQuery.data || []).length > 0 ? (
-              <View className="bg-surface border border-border rounded-xl mt-1">
-                {(accountsQuery.data || []).slice(0, 5).map((item: any) => (
-                  <TouchableOpacity key={item.id} className="px-4 py-2.5 border-b border-border/50"
-                    onPress={() => { setAccountName(item.name); setAccountId(String(item.id)); setShowAccountSuggestions(false); }}>
-                    <Text className="text-sm text-foreground">{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
           </View>
+
+          {/* Linked Account - Picker */}
+          <PickerField
+            label="Linked Account"
+            value={accountName}
+            placeholder="Select asset account..."
+            onPress={() => setShowAccountPicker(true)}
+            required={!isEditing}
+            icon="account-balance"
+          />
+
+          {/* Target Amount */}
           <View className="mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Target Amount</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="0.00" placeholderTextColor={colors.muted} value={targetAmount} onChangeText={setTargetAmount} keyboardType="decimal-pad" />
+            <TextInput
+              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
+              placeholder="0.00"
+              placeholderTextColor={colors.muted}
+              value={targetAmount}
+              onChangeText={setTargetAmount}
+              keyboardType="decimal-pad"
+            />
           </View>
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Target Date</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} value={targetDate} onChangeText={setTargetDate} />
-          </View>
+
+          {/* Target Date - Calendar Picker */}
+          <DatePickerField
+            label="Target Date"
+            value={targetDate}
+            onChange={setTargetDate}
+          />
+
+          {/* Notes */}
           <View className="mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Notes</Text>
-            <TextInput className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground" placeholder="Optional notes..." placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes} multiline numberOfLines={3} textAlignVertical="top" />
+            <TextInput
+              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
+              placeholder="Optional notes..."
+              placeholderTextColor={colors.muted}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
           </View>
+
           <View className="h-20" />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Account Picker */}
+      <PickerSheet
+        visible={showAccountPicker}
+        onClose={() => setShowAccountPicker(false)}
+        title="Select Asset Account"
+        items={accountItems}
+        selectedId={accountId}
+        onSelect={(item) => {
+          setAccountId(item.id);
+          setAccountName(item.label);
+        }}
+        loading={accountsQuery.isLoading}
+      />
     </ScreenContainer>
   );
 }

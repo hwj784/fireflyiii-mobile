@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
@@ -9,10 +9,27 @@ import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { PickerSheet, PickerField, type PickerItem } from '@/components/ui/picker-sheet';
 
-const ACCOUNT_TYPES = ['asset', 'expense', 'revenue', 'liability'];
-const ASSET_ROLES = ['defaultAsset', 'savingAsset', 'ccAsset', 'cashWalletAsset'];
-const LIABILITY_TYPES = ['loan', 'debt', 'mortgage'];
+const ACCOUNT_TYPES: { id: string; label: string; icon: string }[] = [
+  { id: 'asset', label: 'Asset', icon: 'account-balance' },
+  { id: 'expense', label: 'Expense', icon: 'shopping-cart' },
+  { id: 'revenue', label: 'Revenue', icon: 'trending-up' },
+  { id: 'liability', label: 'Liability', icon: 'money-off' },
+];
+
+const ASSET_ROLES: { id: string; label: string; sublabel: string }[] = [
+  { id: 'defaultAsset', label: 'Default Asset', sublabel: 'Regular checking/savings account' },
+  { id: 'savingAsset', label: 'Savings', sublabel: 'Dedicated savings account' },
+  { id: 'ccAsset', label: 'Credit Card', sublabel: 'Credit card account' },
+  { id: 'cashWalletAsset', label: 'Cash Wallet', sublabel: 'Physical cash' },
+];
+
+const LIABILITY_TYPES: { id: string; label: string }[] = [
+  { id: 'loan', label: 'Loan' },
+  { id: 'debt', label: 'Debt' },
+  { id: 'mortgage', label: 'Mortgage' },
+];
 
 export default function AccountFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -26,6 +43,7 @@ export default function AccountFormScreen() {
   const [role, setRole] = useState('defaultAsset');
   const [liabilityType, setLiabilityType] = useState('loan');
   const [currencyCode, setCurrencyCode] = useState('');
+  const [currencyDisplay, setCurrencyDisplay] = useState('');
   const [iban, setIban] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
@@ -33,10 +51,22 @@ export default function AccountFormScreen() {
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [showLiabilityPicker, setShowLiabilityPicker] = useState(false);
+
   const accountQuery = useQuery({
     queryKey: ['account', id],
     queryFn: () => api.getAccount(id!),
     enabled: isEditing,
+  });
+
+  const currenciesQuery = useQuery({
+    queryKey: ['currencies-all'],
+    queryFn: async () => {
+      const res = await api.getCurrencies(1);
+      return res.data;
+    },
   });
 
   useEffect(() => {
@@ -47,12 +77,36 @@ export default function AccountFormScreen() {
       setRole(attr.account_role || 'defaultAsset');
       setLiabilityType(attr.liability_type || 'loan');
       setCurrencyCode(attr.currency_code || '');
+      setCurrencyDisplay(attr.currency_code ? `${attr.currency_code} (${attr.currency_symbol || ''})` : '');
       setIban(attr.iban || '');
       setAccountNumber(attr.account_number || '');
       setNotes(attr.notes || '');
       setActive(attr.active !== false);
     }
   }, [accountQuery.data]);
+
+  const currencyItems: PickerItem[] = useMemo(() => {
+    if (!currenciesQuery.data) return [];
+    return currenciesQuery.data.map((c: any) => ({
+      id: c.attributes.code,
+      label: `${c.attributes.code} - ${c.attributes.name}`,
+      sublabel: `Symbol: ${c.attributes.symbol}`,
+      icon: 'currency-exchange',
+    }));
+  }, [currenciesQuery.data]);
+
+  const roleItems: PickerItem[] = ASSET_ROLES.map((r) => ({
+    id: r.id,
+    label: r.label,
+    sublabel: r.sublabel,
+    icon: r.id === 'ccAsset' ? 'credit-card' : r.id === 'savingAsset' ? 'savings' : r.id === 'cashWalletAsset' ? 'account-balance-wallet' : 'account-balance',
+  }));
+
+  const liabilityItems: PickerItem[] = LIABILITY_TYPES.map((lt) => ({
+    id: lt.id,
+    label: lt.label,
+    icon: 'money-off',
+  }));
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -98,6 +152,10 @@ export default function AccountFormScreen() {
     }
   };
 
+  const selectedTypeInfo = ACCOUNT_TYPES.find((t) => t.id === type);
+  const selectedRoleInfo = ASSET_ROLES.find((r) => r.id === role);
+  const selectedLiabilityInfo = LIABILITY_TYPES.find((lt) => lt.id === liabilityType);
+
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
@@ -116,6 +174,7 @@ export default function AccountFormScreen() {
         </View>
 
         <ScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
+          {/* Account Name */}
           <View className="mt-4 mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Account Name *</Text>
             <TextInput
@@ -127,35 +186,33 @@ export default function AccountFormScreen() {
             />
           </View>
 
+          {/* Account Type - Chip selector */}
           {!isEditing ? (
             <View className="mb-4">
-              <Text className="text-sm font-medium text-foreground mb-1">Account Type</Text>
+              <Text className="text-sm font-medium text-foreground mb-2">Account Type</Text>
               <View className="flex-row flex-wrap gap-2">
                 {ACCOUNT_TYPES.map((t) => (
                   <TouchableOpacity
-                    key={t}
-                    className={`px-3 py-2 rounded-xl border ${type === t ? 'bg-primary/10 border-primary' : 'border-border'}`}
-                    onPress={() => setType(t)}
+                    key={t.id}
+                    className="flex-row items-center px-4 py-2.5 rounded-xl border"
+                    style={{
+                      backgroundColor: type === t.id ? colors.primary + '15' : 'transparent',
+                      borderColor: type === t.id ? colors.primary : colors.border,
+                    }}
+                    onPress={() => setType(t.id)}
+                    activeOpacity={0.7}
                   >
-                    <Text className={`text-sm capitalize ${type === t ? 'text-primary font-medium' : 'text-muted'}`}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {type === 'asset' ? (
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-foreground mb-1">Role</Text>
-              <View className="flex-row flex-wrap gap-2">
-                {ASSET_ROLES.map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    className={`px-3 py-2 rounded-xl border ${role === r ? 'bg-primary/10 border-primary' : 'border-border'}`}
-                    onPress={() => setRole(r)}
-                  >
-                    <Text className={`text-xs ${role === r ? 'text-primary font-medium' : 'text-muted'}`}>
-                      {r.replace(/([A-Z])/g, ' $1').trim()}
+                    <MaterialIcons
+                      name={t.icon as any}
+                      size={16}
+                      color={type === t.id ? colors.primary : colors.muted}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      className="text-sm font-medium"
+                      style={{ color: type === t.id ? colors.primary : colors.muted }}
+                    >
+                      {t.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -163,35 +220,38 @@ export default function AccountFormScreen() {
             </View>
           ) : null}
 
-          {type === 'liability' ? (
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-foreground mb-1">Liability Type</Text>
-              <View className="flex-row gap-2">
-                {LIABILITY_TYPES.map((lt) => (
-                  <TouchableOpacity
-                    key={lt}
-                    className={`px-3 py-2 rounded-xl border ${liabilityType === lt ? 'bg-primary/10 border-primary' : 'border-border'}`}
-                    onPress={() => setLiabilityType(lt)}
-                  >
-                    <Text className={`text-sm capitalize ${liabilityType === lt ? 'text-primary font-medium' : 'text-muted'}`}>{lt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+          {/* Asset Role - Picker */}
+          {type === 'asset' ? (
+            <PickerField
+              label="Account Role"
+              value={selectedRoleInfo?.label || role}
+              placeholder="Select role..."
+              onPress={() => setShowRolePicker(true)}
+              icon="badge"
+            />
           ) : null}
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Currency Code</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="EUR, USD, etc."
-              placeholderTextColor={colors.muted}
-              value={currencyCode}
-              onChangeText={setCurrencyCode}
-              autoCapitalize="characters"
+          {/* Liability Type - Picker */}
+          {type === 'liability' ? (
+            <PickerField
+              label="Liability Type"
+              value={selectedLiabilityInfo?.label || liabilityType}
+              placeholder="Select type..."
+              onPress={() => setShowLiabilityPicker(true)}
+              icon="money-off"
             />
-          </View>
+          ) : null}
 
+          {/* Currency - Picker */}
+          <PickerField
+            label="Currency"
+            value={currencyDisplay || currencyCode}
+            placeholder="Select currency..."
+            onPress={() => setShowCurrencyPicker(true)}
+            icon="currency-exchange"
+          />
+
+          {/* Opening Balance */}
           {!isEditing ? (
             <View className="mb-4">
               <Text className="text-sm font-medium text-foreground mb-1">Opening Balance</Text>
@@ -206,6 +266,7 @@ export default function AccountFormScreen() {
             </View>
           ) : null}
 
+          {/* IBAN */}
           <View className="mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">IBAN</Text>
             <TextInput
@@ -218,6 +279,7 @@ export default function AccountFormScreen() {
             />
           </View>
 
+          {/* Account Number */}
           <View className="mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Account Number</Text>
             <TextInput
@@ -229,6 +291,7 @@ export default function AccountFormScreen() {
             />
           </View>
 
+          {/* Notes */}
           <View className="mb-4">
             <Text className="text-sm font-medium text-foreground mb-1">Notes</Text>
             <TextInput
@@ -243,17 +306,57 @@ export default function AccountFormScreen() {
             />
           </View>
 
+          {/* Active toggle */}
           <TouchableOpacity
-            className="flex-row items-center mb-4"
+            className="flex-row items-center mb-4 bg-surface border border-border rounded-xl px-4 py-3"
             onPress={() => setActive(!active)}
+            activeOpacity={0.7}
           >
-            <MaterialIcons name={active ? 'check-box' : 'check-box-outline-blank'} size={24} color={colors.primary} />
-            <Text className="text-base text-foreground ml-2">Active</Text>
+            <MaterialIcons
+              name={active ? 'toggle-on' : 'toggle-off'}
+              size={28}
+              color={active ? colors.primary : colors.muted}
+            />
+            <Text className="text-base text-foreground ml-3">Active Account</Text>
           </TouchableOpacity>
 
           <View className="h-20" />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Picker Sheets */}
+      <PickerSheet
+        visible={showCurrencyPicker}
+        onClose={() => setShowCurrencyPicker(false)}
+        title="Select Currency"
+        items={currencyItems}
+        selectedId={currencyCode}
+        onSelect={(item) => {
+          setCurrencyCode(item.id);
+          setCurrencyDisplay(item.label);
+        }}
+        loading={currenciesQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showRolePicker}
+        onClose={() => setShowRolePicker(false)}
+        title="Select Account Role"
+        items={roleItems}
+        selectedId={role}
+        onSelect={(item) => setRole(item.id)}
+        searchable={false}
+      />
+
+      <PickerSheet
+        visible={showLiabilityPicker}
+        onClose={() => setShowLiabilityPicker(false)}
+        title="Select Liability Type"
+        items={liabilityItems}
+        selectedId={liabilityType}
+        onSelect={(item) => setLiabilityType(item.id)}
+        searchable={false}
+      />
     </ScreenContainer>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
@@ -10,6 +10,8 @@ import { useColors } from '@/hooks/use-colors';
 import api from '@/lib/api';
 import { getToday } from '@/lib/helpers';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { PickerSheet, PickerField, MultiPickerField, type PickerItem } from '@/components/ui/picker-sheet';
+import { DatePickerField } from '@/components/ui/date-picker';
 
 const TX_TYPES = ['withdrawal', 'deposit', 'transfer'] as const;
 
@@ -28,13 +30,24 @@ export default function TransactionFormScreen() {
   const [destAccount, setDestAccount] = useState('');
   const [destAccountId, setDestAccountId] = useState('');
   const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [budget, setBudget] = useState('');
-  const [tags, setTags] = useState('');
+  const [budgetId, setBudgetId] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [date, setDate] = useState(getToday());
   const [notes, setNotes] = useState('');
   const [foreignAmount, setForeignAmount] = useState('');
   const [foreignCurrencyCode, setForeignCurrencyCode] = useState('');
+  const [foreignCurrencyId, setForeignCurrencyId] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Picker visibility states
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
+  const [showDestPicker, setShowDestPicker] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showBudgetPicker, setShowBudgetPicker] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   // Load existing transaction for editing
   const txQuery = useQuery({
@@ -55,8 +68,10 @@ export default function TransactionFormScreen() {
         setDestAccount(tx.destination_name || '');
         setDestAccountId(tx.destination_id || '');
         setCategory(tx.category_name || '');
+        setCategoryId(tx.category_id || '');
         setBudget(tx.budget_name || '');
-        setTags(tx.tags?.join(', ') || '');
+        setBudgetId(tx.budget_id || '');
+        setSelectedTags(tx.tags || []);
         setDate(tx.date?.split('T')[0] || getToday());
         setNotes(tx.notes || '');
         setForeignAmount(tx.foreign_amount || '');
@@ -65,27 +80,120 @@ export default function TransactionFormScreen() {
     }
   }, [txQuery.data]);
 
-  // Autocomplete suggestions
-  const [showSourceSuggestions, setShowSourceSuggestions] = useState(false);
-  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
-
-  const sourceQuery = useQuery({
-    queryKey: ['autocomplete', 'accounts', sourceAccount, type],
-    queryFn: () => {
-      const accountTypes = type === 'withdrawal' ? 'Asset account' : type === 'deposit' ? 'Revenue account' : 'Asset account';
-      return api.autocomplete('accounts', sourceAccount, { types: accountTypes });
+  // Fetch data for pickers
+  const accountsQuery = useQuery({
+    queryKey: ['accounts-all'],
+    queryFn: async () => {
+      const pages: any[] = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore && page <= 10) {
+        const res = await api.getAccounts(page);
+        pages.push(...res.data);
+        hasMore = page < (res.meta?.pagination?.total_pages || 1);
+        page++;
+      }
+      return pages;
     },
-    enabled: sourceAccount.length > 0 && showSourceSuggestions,
   });
 
-  const destQuery = useQuery({
-    queryKey: ['autocomplete', 'accounts-dest', destAccount, type],
-    queryFn: () => {
-      const accountTypes = type === 'withdrawal' ? 'Expense account' : type === 'deposit' ? 'Asset account' : 'Asset account';
-      return api.autocomplete('accounts', destAccount, { types: accountTypes });
+  const categoriesQuery = useQuery({
+    queryKey: ['categories-all'],
+    queryFn: async () => {
+      const res = await api.getCategories(1);
+      return res.data;
     },
-    enabled: destAccount.length > 0 && showDestSuggestions,
   });
+
+  const budgetsQuery = useQuery({
+    queryKey: ['budgets-all'],
+    queryFn: async () => {
+      const res = await api.getBudgets(1);
+      return res.data;
+    },
+  });
+
+  const tagsQuery = useQuery({
+    queryKey: ['tags-all'],
+    queryFn: async () => {
+      const res = await api.getTags(1);
+      return res.data;
+    },
+  });
+
+  const currenciesQuery = useQuery({
+    queryKey: ['currencies-all'],
+    queryFn: async () => {
+      const res = await api.getCurrencies(1);
+      return res.data;
+    },
+  });
+
+  // Build picker items
+  const sourceAccountItems: PickerItem[] = useMemo(() => {
+    if (!accountsQuery.data) return [];
+    const accounts = accountsQuery.data;
+    const typeFilter = type === 'deposit' ? 'revenue' : 'asset';
+    return accounts
+      .filter((a: any) => type === 'transfer' ? a.attributes.type === 'asset' : a.attributes.type === typeFilter)
+      .map((a: any) => ({
+        id: a.id,
+        label: a.attributes.name,
+        sublabel: `${a.attributes.currency_symbol || ''}${parseFloat(a.attributes.current_balance || 0).toFixed(2)} · ${a.attributes.type}`,
+        icon: 'account-balance',
+      }));
+  }, [accountsQuery.data, type]);
+
+  const destAccountItems: PickerItem[] = useMemo(() => {
+    if (!accountsQuery.data) return [];
+    const accounts = accountsQuery.data;
+    const typeFilter = type === 'withdrawal' ? 'expense' : 'asset';
+    return accounts
+      .filter((a: any) => type === 'transfer' ? a.attributes.type === 'asset' : a.attributes.type === typeFilter)
+      .map((a: any) => ({
+        id: a.id,
+        label: a.attributes.name,
+        sublabel: `${a.attributes.currency_symbol || ''}${parseFloat(a.attributes.current_balance || 0).toFixed(2)} · ${a.attributes.type}`,
+        icon: 'account-balance',
+      }));
+  }, [accountsQuery.data, type]);
+
+  const categoryItems: PickerItem[] = useMemo(() => {
+    if (!categoriesQuery.data) return [];
+    return categoriesQuery.data.map((c: any) => ({
+      id: c.id,
+      label: c.attributes.name,
+      icon: 'category',
+    }));
+  }, [categoriesQuery.data]);
+
+  const budgetItems: PickerItem[] = useMemo(() => {
+    if (!budgetsQuery.data) return [];
+    return budgetsQuery.data.map((b: any) => ({
+      id: b.id,
+      label: b.attributes.name,
+      icon: 'pie-chart',
+    }));
+  }, [budgetsQuery.data]);
+
+  const tagItems: PickerItem[] = useMemo(() => {
+    if (!tagsQuery.data) return [];
+    return tagsQuery.data.map((t: any) => ({
+      id: t.attributes.tag,
+      label: t.attributes.tag,
+      icon: 'local-offer',
+    }));
+  }, [tagsQuery.data]);
+
+  const currencyItems: PickerItem[] = useMemo(() => {
+    if (!currenciesQuery.data) return [];
+    return currenciesQuery.data.map((c: any) => ({
+      id: c.attributes.code,
+      label: `${c.attributes.code} - ${c.attributes.name}`,
+      sublabel: c.attributes.symbol,
+      icon: 'currency-exchange',
+    }));
+  }, [currenciesQuery.data]);
 
   const handleSave = async () => {
     if (!amount || !description) {
@@ -107,7 +215,7 @@ export default function TransactionFormScreen() {
           destination_name: destAccount || undefined,
           category_name: category || undefined,
           budget_name: budget || undefined,
-          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+          tags: selectedTags.length > 0 ? selectedTags : undefined,
           notes: notes || undefined,
           foreign_amount: foreignAmount || undefined,
           foreign_currency_code: foreignCurrencyCode || undefined,
@@ -163,7 +271,7 @@ export default function TransactionFormScreen() {
             {TX_TYPES.map((t) => (
               <TouchableOpacity
                 key={t}
-                className={`flex-1 py-2.5 rounded-xl items-center border`}
+                className="flex-1 py-2.5 rounded-xl items-center border"
                 style={{
                   backgroundColor: type === t ? typeColors[t] + '18' : 'transparent',
                   borderColor: type === t ? typeColors[t] : colors.border,
@@ -206,111 +314,59 @@ export default function TransactionFormScreen() {
             />
           </View>
 
-          {/* Source Account */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">
-              {type === 'deposit' ? 'Revenue Account' : 'Source Account'}
-            </Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="Search account..."
-              placeholderTextColor={colors.muted}
-              value={sourceAccount}
-              onChangeText={(text) => { setSourceAccount(text); setSourceAccountId(''); setShowSourceSuggestions(true); }}
-              onBlur={() => setTimeout(() => setShowSourceSuggestions(false), 200)}
-            />
-            {showSourceSuggestions && (sourceQuery.data || []).length > 0 ? (
-              <View className="bg-surface border border-border rounded-xl mt-1 max-h-40 overflow-hidden">
-                {(sourceQuery.data || []).slice(0, 5).map((item: any) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    className="px-4 py-2.5 border-b border-border/50"
-                    onPress={() => { setSourceAccount(item.name); setSourceAccountId(String(item.id)); setShowSourceSuggestions(false); }}
-                  >
-                    <Text className="text-sm text-foreground">{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
-          </View>
+          {/* Source Account - Picker */}
+          <PickerField
+            label={type === 'deposit' ? 'Revenue Account' : 'Source Account'}
+            value={sourceAccount}
+            placeholder="Select account..."
+            onPress={() => setShowSourcePicker(true)}
+            icon="account-balance"
+          />
 
-          {/* Destination Account */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">
-              {type === 'withdrawal' ? 'Expense Account' : 'Destination Account'}
-            </Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="Search account..."
-              placeholderTextColor={colors.muted}
-              value={destAccount}
-              onChangeText={(text) => { setDestAccount(text); setDestAccountId(''); setShowDestSuggestions(true); }}
-              onBlur={() => setTimeout(() => setShowDestSuggestions(false), 200)}
-            />
-            {showDestSuggestions && (destQuery.data || []).length > 0 ? (
-              <View className="bg-surface border border-border rounded-xl mt-1 max-h-40 overflow-hidden">
-                {(destQuery.data || []).slice(0, 5).map((item: any) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    className="px-4 py-2.5 border-b border-border/50"
-                    onPress={() => { setDestAccount(item.name); setDestAccountId(String(item.id)); setShowDestSuggestions(false); }}
-                  >
-                    <Text className="text-sm text-foreground">{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
-          </View>
+          {/* Destination Account - Picker */}
+          <PickerField
+            label={type === 'withdrawal' ? 'Expense Account' : 'Destination Account'}
+            value={destAccount}
+            placeholder="Select account..."
+            onPress={() => setShowDestPicker(true)}
+            icon="account-balance"
+          />
 
-          {/* Date */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Date</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.muted}
-              value={date}
-              onChangeText={setDate}
-            />
-          </View>
+          {/* Date - Calendar Picker */}
+          <DatePickerField
+            label="Date"
+            value={date}
+            onChange={setDate}
+          />
 
-          {/* Category */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Category</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="Category name"
-              placeholderTextColor={colors.muted}
-              value={category}
-              onChangeText={setCategory}
-            />
-          </View>
+          {/* Category - Picker */}
+          <PickerField
+            label="Category"
+            value={category}
+            placeholder="Select category..."
+            onPress={() => setShowCategoryPicker(true)}
+            icon="category"
+          />
 
-          {/* Budget */}
+          {/* Budget - Picker (only for withdrawals) */}
           {type === 'withdrawal' ? (
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-foreground mb-1">Budget</Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-                placeholder="Budget name"
-                placeholderTextColor={colors.muted}
-                value={budget}
-                onChangeText={setBudget}
-              />
-            </View>
+            <PickerField
+              label="Budget"
+              value={budget}
+              placeholder="Select budget..."
+              onPress={() => setShowBudgetPicker(true)}
+              icon="pie-chart"
+            />
           ) : null}
 
-          {/* Tags */}
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-foreground mb-1">Tags</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-              placeholder="Comma separated tags"
-              placeholderTextColor={colors.muted}
-              value={tags}
-              onChangeText={setTags}
-            />
-          </View>
+          {/* Tags - Multi Picker */}
+          <MultiPickerField
+            label="Tags"
+            values={selectedTags}
+            placeholder="Select tags..."
+            onPress={() => setShowTagPicker(true)}
+            onRemove={(tag) => setSelectedTags((prev) => prev.filter((t) => t !== tag))}
+          />
 
           {/* Notes */}
           <View className="mb-4">
@@ -339,20 +395,97 @@ export default function TransactionFormScreen() {
                 onChangeText={setForeignAmount}
                 keyboardType="decimal-pad"
               />
-              <TextInput
-                className="w-24 bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground"
-                placeholder="USD"
-                placeholderTextColor={colors.muted}
-                value={foreignCurrencyCode}
-                onChangeText={setForeignCurrencyCode}
-                autoCapitalize="characters"
-              />
+              <TouchableOpacity
+                className="w-28 bg-surface border border-border rounded-xl px-3 py-3 flex-row items-center justify-between"
+                onPress={() => setShowCurrencyPicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text className={`text-base ${foreignCurrencyCode ? 'text-foreground font-medium' : 'text-muted'}`}>
+                  {foreignCurrencyCode || 'Currency'}
+                </Text>
+                <MaterialIcons name="keyboard-arrow-down" size={18} color={colors.muted} />
+              </TouchableOpacity>
             </View>
           </View>
 
           <View className="h-20" />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Picker Sheets */}
+      <PickerSheet
+        visible={showSourcePicker}
+        onClose={() => setShowSourcePicker(false)}
+        title={type === 'deposit' ? 'Select Revenue Account' : 'Select Source Account'}
+        items={sourceAccountItems}
+        selectedId={sourceAccountId}
+        onSelect={(item) => { setSourceAccount(item.label); setSourceAccountId(item.id); }}
+        allowCustom
+        customPlaceholder="Enter account name..."
+        onCustomSubmit={(val) => { setSourceAccount(val); setSourceAccountId(''); }}
+        loading={accountsQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showDestPicker}
+        onClose={() => setShowDestPicker(false)}
+        title={type === 'withdrawal' ? 'Select Expense Account' : 'Select Destination Account'}
+        items={destAccountItems}
+        selectedId={destAccountId}
+        onSelect={(item) => { setDestAccount(item.label); setDestAccountId(item.id); }}
+        allowCustom
+        customPlaceholder="Enter account name..."
+        onCustomSubmit={(val) => { setDestAccount(val); setDestAccountId(''); }}
+        loading={accountsQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showCategoryPicker}
+        onClose={() => setShowCategoryPicker(false)}
+        title="Select Category"
+        items={categoryItems}
+        selectedId={categoryId}
+        onSelect={(item) => { setCategory(item.label); setCategoryId(item.id); }}
+        allowCustom
+        customPlaceholder="Enter new category..."
+        onCustomSubmit={(val) => { setCategory(val); setCategoryId(''); }}
+        loading={categoriesQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showBudgetPicker}
+        onClose={() => setShowBudgetPicker(false)}
+        title="Select Budget"
+        items={budgetItems}
+        selectedId={budgetId}
+        onSelect={(item) => { setBudget(item.label); setBudgetId(item.id); }}
+        loading={budgetsQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showTagPicker}
+        onClose={() => setShowTagPicker(false)}
+        title="Select Tags"
+        items={tagItems}
+        selectedIds={selectedTags}
+        multiSelect
+        onSelect={() => {}}
+        onMultiSelect={(items) => setSelectedTags(items.map((i) => i.label))}
+        allowCustom
+        customPlaceholder="Enter new tag..."
+        onCustomSubmit={(val) => setSelectedTags((prev) => [...prev, val])}
+        loading={tagsQuery.isLoading}
+      />
+
+      <PickerSheet
+        visible={showCurrencyPicker}
+        onClose={() => setShowCurrencyPicker(false)}
+        title="Select Currency"
+        items={currencyItems}
+        selectedId={foreignCurrencyCode}
+        onSelect={(item) => { setForeignCurrencyCode(item.id); setForeignCurrencyId(item.id); }}
+        loading={currenciesQuery.isLoading}
+      />
     </ScreenContainer>
   );
 }

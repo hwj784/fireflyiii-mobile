@@ -35,3 +35,11 @@
 - [x] Pull-to-refresh on all list screens
 - [x] App logo generation (Firefly + dollar sign icon)
 - [x] Fix TypeScript errors (style callbacks, missing API methods)
+- [x] Create reusable SearchablePicker component (PickerSheet, PickerField, MultiPickerField, DatePickerField)
+- [x] Transaction form: currency selector, account selector, category selector, budget selector, tag multi-selector
+- [x] Account form: currency selector, account type chip selector, role picker, liability type picker
+- [x] Budget form: currency selector for limit
+- [x] Bill form: currency selector, frequency picker
+- [x] Piggy bank form: account picker for linked account
+- [x] Improve date picker UX - custom calendar modal with month navigation
+- [x] Add allowCustom support in pickers for creating new items inline
